@@ -66,46 +66,43 @@ abstract class AbstractINIMultiDatabaseConnectionFactory {
 				if ($uri === null) $uri = '';
 			}
 
-			foreach ($connectionParamsByName as $name=>$params) {
-				// No need to check the default connection; we fall back to that anyway.
-				if ($name == '') continue;
+			if (($vhost != '') || ($uri != '')) {
+				foreach ($connectionParamsByName as $name=>$params) {
+					// No need to check the default connection; we fall back to that anyway.
+					if ($name == '') continue;
 
-				$isQualified = false;
+					$isQualified = false;
 
-				// Check the vhost.  If the configured vhost is missing, empty, or *, it matches anything;
-				// otherwise, the vhost must either match the configured vhost or be a subdomain of it.
-				if (isset($params['vhost']) && ($params['vhost'] != '') && ($params['vhost'] != '*')) {
-					$isQualified = true;
-					$testVhost = strtolower($params['vhost']);
-					$testVhostSub = (($testVhost != '') && ($testVhost[0] != '.')) ? '.'.$testVhost : $testVhost;
-					if (($vhost != '') &&
-						($vhost != $testVhost) &&
-						(substr_compare($vhost, $testVhostSub, -strlen($testVhostSub), strlen($testVhostSub)) != 0)) {
-						// The vhost doesn't match, and is not a subdomain of the configured vhost.
-						continue;
+					// Check the vhost.  If the configured vhost is missing, empty, or *, it matches anything;
+					// otherwise, the vhost must either match the configured vhost or be a subdomain of it.
+					if (($vhost != '') && isset($params['vhost']) && ($params['vhost'] != '') && ($params['vhost'] != '*')) {
+						$isQualified = true;
+						$testVhost = strtolower($params['vhost']);
+						$testVhostSub = (($testVhost != '') && ($testVhost[0] != '.')) ? '.'.$testVhost : $testVhost;
+						if (($vhost != $testVhost) &&
+							(substr_compare($vhost, $testVhostSub, -strlen($testVhostSub), strlen($testVhostSub)) != 0)) {
+							// The vhost doesn't match, and is not a subdomain of the configured vhost.
+							continue;
+						}
 					}
-				}
 
-				// Check the uriPrefix.  If the configured uriPrefix is missing, empty or *, it matches anything;
-				// otherwise, the URI must match uriPrefix or begin with it.
-				if (isset($params['uriPrefix']) && ($params['uriPrefix'] != '') && ($params['uriPrefix'] != '*')) {
-					$isQualified = true;
-					$testURIPrefix = strtolower($params['uriPrefix']);
-					$testURIPrefixSub = (($testURIPrefix != '') && ($testURIPrefix[strlen($testURIPrefix)-1] != '/')) ?
-						$testURIPrefix.'/' : $testURIPrefix;
-					if (($uri != '') &&
-						($uri != $testURIPrefix) &&
-						(substr_compare($uri, $testURIPrefixSub, 0, strlen($testURIPrefixSub)) != 0)) {
-						// The uri doesn't match, and it does not begin with the configured uriPrefix.
-						continue;
+					// Check the uriPrefix.  If the configured uriPrefix is missing, empty or *, it matches anything;
+					// otherwise, the URI must match uriPrefix or begin with it.
+					if (($uri != '') && isset($params['uriPrefix']) && ($params['uriPrefix'] != '') && ($params['uriPrefix'] != '*')) {
+						$isQualified = true;
+						$testURIPrefix = strtolower($params['uriPrefix']);
+						$testURIPrefixSub = (($testURIPrefix != '') && ($testURIPrefix[strlen($testURIPrefix)-1] != '/')) ?
+							$testURIPrefix.'/' : $testURIPrefix;
+						if (($uri != $testURIPrefix) &&
+							(substr_compare($uri, $testURIPrefixSub, 0, strlen($testURIPrefixSub)) != 0)) {
+							// The uri doesn't match, and it does not begin with the configured uriPrefix.
+							continue;
+						}
 					}
+
+					if ($isQualified) return $params;
 				}
-
-				// Named connections MUST be qualified by vhost or uriPrefix, or both; otherwise, they are ignored.
-				if (!$isQualified) continue;
-
-				return $params;
-			}
+			} // if (($vhost != '') || ($uri != ''))
 		}
 
 		return isset($connectionParamsByName[$connectionName]) ?
