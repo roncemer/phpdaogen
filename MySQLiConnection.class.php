@@ -4,7 +4,7 @@
 // ANY MANUAL EDITS WILL BE LOST.
 
 // MySQLiConnection.class.php
-// Copyright (c) 2010-2014 Ronald B. Cemer
+// Copyright (c) 2010-2015 Ronald B. Cemer
 // All rights reserved.
 // This software is released under the BSD license.
 // Please see the accompanying LICENSE.txt for details.
@@ -51,6 +51,7 @@ class MySQLiConnection extends Connection {
 			$this->conn = false;
 			throw new Exception(sprintf('Database connection failed; errno %d - %s', $cn->connect_errno, $cn->connect_error));
 		}
+		$this->conn->set_charset("utf8");
 	} // open()
 
 	public function close() {

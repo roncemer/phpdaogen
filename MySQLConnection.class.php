@@ -4,7 +4,7 @@
 // ANY MANUAL EDITS WILL BE LOST.
 
 // MySQLConnection.class.php
-// Copyright (c) 2010-2014 Ronald B. Cemer
+// Copyright (c) 2010-2015 Ronald B. Cemer
 // All rights reserved.
 // This software is released under the BSD license.
 // Please see the accompanying LICENSE.txt for details.
@@ -39,6 +39,7 @@ class MySQLConnection extends Connection {
 		if (($this->conn = mysql_connect($this->server, $this->username, $this->password, true, 128)) === false) {
 			throw new Exception('Database connection failed');
 		}
+		mysql_set_charset('utf8', $this->conn);
 		mysql_select_db($this->database, $this->conn);
 	} // open()
 
