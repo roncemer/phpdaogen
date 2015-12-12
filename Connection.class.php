@@ -4,12 +4,16 @@
 // ANY MANUAL EDITS WILL BE LOST.
 
 // Connection.class.php
-// Copyright (c) 2010-2014 Ronald B. Cemer
+// Copyright (c) 2010-2015 Ronald B. Cemer
 // All rights reserved.
 // This software is released under the BSD license.
 // Please see the accompanying LICENSE.txt for details.
 
 abstract class Connection {
+	// When AbstractINIMultiDatabaseConnectionFactory.class.php creates a connection, it populates
+	// this attribute with the name of the connection which was selected from the available connections
+	// in database.ini.
+	public $connectionName = null;
 	// Set this to true to throw an Exception if a query or update fails.
 	// The Exception will include a stack trace to help locate the offending SQL query.
 	public $throwExceptionOnFailedQuery = true;

@@ -31,7 +31,9 @@ abstract class AbstractINIMultiDatabaseConnectionFactory {
 		if (!class_exists($connectionClass, false)) {
 			include dirname(__FILE__).'/'.$connectionClass.'.class.php';
 		}
-		return new $connectionClass($params['server'], $params['username'], $params['password'], $params['database']);
+		$con = new $connectionClass($params['server'], $params['username'], $params['password'], $params['database']);
+		$con->connectionName = $params['connectionName'];
+		return $con;
 	} // getConnection()
 
 	// If $connectionName !== null, get the parameters for the specified connection.
@@ -164,6 +166,11 @@ abstract class AbstractINIMultiDatabaseConnectionFactory {
 					}
 				}
 			}
+		}
+
+		// Be sure each connection has its own connection name as the connectionName property.
+		foreach (array_keys($connectionParamsByName) as $name) {
+			$connectionParamsByName[$name]['connectionName'] = $name;
 		}
 
 		return $connectionParamsByName;
