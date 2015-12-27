@@ -1544,6 +1544,8 @@ class SQLDDLSerializer {
 
 		$ldbpfx = ($localDBName != '') ? $localDBName.'.' : '';
 
+		$tablesCreated = array();
+
 		$sqlStatements = array();
 		for ($pass = 1; $pass <= 3; $pass++) {
 			foreach ($ddl->topLevelEntities as &$tle) {
@@ -1582,17 +1584,20 @@ class SQLDDLSerializer {
 						}
 					}
 
+					$tablesCreated[] = $ldbpfx.$tle->tableName;
+
 					$sqlStatements[] = sprintf('drop view if exists %s', $ldbpfx.$tle->tableName);
 					$sql = sprintf("create table %s (", $ldbpfx.$tle->tableName);
 					$sep = '';
 					foreach ($tle->columns as &$col) {
 						$sql .= $sep;
-						if ($sep == '') $sep = ", ";
+						if ($sep == '') $sep = ', ';
 						$sql .= ' '.$this->serializeTableColumn($col, $tle->tableName, $dialect, true, true, true, true, true, $localDBName);
 					}
 					unset($col);	// release reference to last element
 					if ($tle->primaryKey !== false) {
 						$sql .= $sep.' primary key (';
+						if ($sep == '') $sep = ', ';
 						$sep2 = '';
 						foreach ($tle->primaryKey->columns as &$col) {
 							$sql .= $sep2.$col->name;
@@ -1601,6 +1606,30 @@ class SQLDDLSerializer {
 						unset($col);	// release reference to last element
 						$sql .= ")";
 					}
+
+					$tmp = $ddl->getTableIndexesAndForeignKeys($tle->tableName);
+					foreach ($tmp->idxs as $itle) {
+						// Currently, we only support fulltext indexes on mysql, so don't
+						// try to create them on any other RDBMS.
+						if ((!$itle->fulltext) || ($dialect == 'mysql')) {
+							$sql .= sprintf(
+								"%s%s index %s (",
+								$sep,
+								$itle->fulltext ? ' fulltext' : ($itle->unique ? ' unique' : ''),
+								$itle->indexName
+							);
+							if ($sep == '') $sep = ', ';
+							$sep2 = '';
+							foreach ($itle->columns as &$col) {
+								$sql .= $sep2.$col->name;
+								if ($sep2 == '') $sep2 = ', ';
+							}
+							unset($col);	// release reference to last element
+							$sql .= ")";
+							unset($sep2);
+						}
+					}
+
 					$sql .= ')';
 					if ($dialect == 'mysql') {
 						$sql .= " engine=InnoDB character set utf8 collate utf8_general_ci";
@@ -1617,6 +1646,12 @@ class SQLDDLSerializer {
 					$tbl = $tmp->tbl;
 					$dbname = (($dbmap !== null) && ($tbl !== false)) ? $dbmap->getDatabase($tbl->group, $tbl->tableName) : null;
 					if (($dbname !== null) && ($dbname != '')) {
+						continue;
+					}
+
+					// Don't create indexes on tables which we just created; we would have already
+					// created the index when we created the table.
+					if (in_array($ldbpfx.$tle->tableName, $tablesCreated)) {
 						continue;
 					}
 
