@@ -361,16 +361,33 @@ class DDLInsertColumn {
 	public $name;
 	// The value (string), or false if none.
 	public $value;
+	// The filename from which to read the value for inserting, or false if none.
+	public $filename;
 	// The system variable name for the value (string), or false if none.
 	public $sysVarValue;
 	// Whether to quote value; only applies when value is set and sysVarValue is false (boolean).
 	public $quoted;
 
-	public function DDLInsertColumn($name, $value, $sysVarValue = false, $quoted = false) {
+	public function DDLInsertColumn($name, $value, $filename = false, $sysVarValue = false, $quoted = false) {
 		$this->name = $name;
 		$this->value = $value;
+		$this->filename = $filename;
 		$this->sysVarValue = $sysVarValue;
 		$this->quoted = $quoted;
+	}
+
+	public function getValueOrFileValue($basepath = '') {
+		if ($this->filename !== false) {
+			$fn = $this->filename;
+			if (($basepath != '') && (($fn == '') || ($fn[0] != '/'))) $fn = $basepath.'/'.$fn;
+			if (!file_exists($fn)) {
+				fprintf(STDERR, "WARNING: Cannot find insert filename: %s\n", $fn);
+				return '';
+			}
+			return file_get_contents($fn);
+		} else if ($this->value !== false) {
+			return $this->value;
+		}
 	}
 } // DDLInsertColumn
 
@@ -959,10 +976,11 @@ EOF
 							}
 						}
 						$inscol = new DDLInsertColumn(
-							$key,
-							$val,
-							false,
-							$quoted
+							$key,		// name
+							$val,		// value
+							false,		// value
+							false,		// sysVarValue
+							$quoted		// quoted
 						);
 						$insert->columns[] = $inscol;
 					}
@@ -1306,15 +1324,9 @@ class YAMLDDLParser {
 							}
 
 							$columnSection = "tables => $tableName => inserts => $insertName => $columnName";
-							$this->__allowOnlyAttrs($columnSection, $columnAttrs, array('value', 'valueIsBase64Encoded', 'sysVarValue', 'quoted'));
-							$this->__requireAtLeastOneAttr($columnSection, $columnAttrs, array('value', 'valueIsBase64Encoded', 'sysVarValue'));
+							$this->__allowOnlyAttrs($columnSection, $columnAttrs, array('valueIsBase64Encoded', 'value', 'sysVarValue', 'filename', 'quoted'));
+							$this->__requireOnlyOneAttr($columnSection, $columnAttrs, array('value', 'sysVarValue', 'filename'));
 							if (isset($columnAttrs['sysVarValue'])) {
-								if (isset($columnAttrs['value'])) {
-									throw new Exception(sprintf(
-										"Cannot have both sysVarValue and value in \"%s\" section.",
-										$columnSection
-									));
-								}
 								if (isset($columnAttrs['quoted'])) {
 									throw new Exception(sprintf(
 										"Cannot have both sysVarValue and quoted in \"%s\" section.",
@@ -1322,10 +1334,19 @@ class YAMLDDLParser {
 									));
 								}
 								$ddlInsert->columns[] = new DDLInsertColumn(
-									$columnName,
-									false,
-									$columnAttrs['sysVarValue'],
-									false
+									$columnName,					// name
+									false,							// value
+									false,							// filename
+									$columnAttrs['sysVarValue'],	// sysVarValue
+									false							// quoted
+								);
+							} else if (isset($columnAttrs['filename'])) {
+								$ddlInsert->columns[] = new DDLInsertColumn(
+									$columnName,					// name
+									false,							// value
+									$columnAttrs['filename'],		// filename
+									false,							// sysVarValue
+									true							// quoted
 								);
 							} else {
 								$val = isset($columnAttrs['value']) ? $columnAttrs['value'] : null;
@@ -1336,10 +1357,12 @@ class YAMLDDLParser {
 									$val = base64_decode($val);
 								}
 								$ddlInsert->columns[] = new DDLInsertColumn(
-									$columnName,
-									$val,
-									false,
+									$columnName,					// name
+									$val,							// value
+									false,							// filename
+									false,							// sysVarValue
 									(isset($columnAttrs['quoted']) && ($columnAttrs['quoted'])) ? true : false
+																	// quoted
 								);
 							}
 						}
@@ -1391,17 +1414,31 @@ class YAMLDDLParser {
 		}
 	}
 
-	protected function __requireAtLeastOneAttr($sectionName, $attrs, $attrNames) {
+	protected function __requireOnlyOneAttr($sectionName, $attrs, $attrNames) {
+		$foundAttrs = array();
 		foreach ($attrNames as $attrName) {
 			if (array_key_exists($attrName, $attrs)) {
-				return;
+				if (in_array($attrName, $foundAttrs)) {
+					throw new Exception(sprintf("Duplicate [%s] attribute in \"%s\" section.", $attrName, $sectionName));
+				} else {
+					$foundAttrs[] = $attrName;
+				}
 			}
 		}
-		throw new Exception(sprintf(
-			"Must specify one of [%s] attributes in \"%s\" section.",
-			implode(', ', $attrNames),
-			$sectionName
-		));
+		if (empty($foundAttrs)) {
+			throw new Exception(sprintf(
+				"Must specify one of [%s] attributes in \"%s\" section.",
+				implode(', ', $attrNames),
+				$sectionName
+			));
+		} else if (count($foundAttrs) > 1) {
+			throw new Exception(sprintf(
+				"Must specify ONLY ONE of [%s] attributes in \"%s\" section; found: %s.",
+				implode(', ', $attrNames),
+				$sectionName,
+				implode(',', $foundAttrs)
+			));
+		}
 	}
 
 	// Load a YAML DDL file, aggegatin it into an aggregate DDL instance.
@@ -1532,8 +1569,9 @@ class SQLDDLSerializer {
 	//   or null if none.  Optional.  Defaults to null.
 	// $localDBName: An optional local database (or schema) name.  If specified, this will be prefixed,
 	// along with a dot, to all local table and view names.
+	// $basepath: The base directory for insert filenames with relative paths.
 	// Returns an array of strings, where each string is a single SQL statement.
-	public function serialize($ddl, $dialect = 'mysql', $dbmap = null, $localDBName = '') {
+	public function serialize($ddl, $dialect = 'mysql', $dbmap = null, $localDBName = '', $basepath = '') {
 		if (!in_array($dialect, DDL::$SUPPORTED_DIALECTS)) {
 			throw new Exception(sprintf(
 				"Requested SQL dialect \"%s\" is not in the list of supported dialects (%s).",
@@ -1714,7 +1752,7 @@ class SQLDDLSerializer {
 						continue;
 					}
 
-					$sqlStatements = array_merge($sqlStatements, $this->serializeInsert($tle, $dialect, null, $localDBName));
+					$sqlStatements = array_merge($sqlStatements, $this->serializeInsert($tle, $dialect, null, $localDBName, $basepath));
 				}	// else if ($tle instanceof DDLInsert)
 			}	// foreach ($ddl->topLevelEntities as &$tle)
 			unset($tle);	// release reference to last element
@@ -1934,7 +1972,7 @@ class SQLDDLSerializer {
 	// and may also be used to transform insert statements into update statements for rows which
 	// exist but have non-key columns whose values don't match the original insert values (for
 	// inserts with key columns and updateIfExists set to true).
-	public function serializeInsert($insert, $dialect, $db = null, $localDBName = null) {
+	public function serializeInsert($insert, $dialect, $db = null, $localDBName = null, $basepath = '') {
 
 		$ldbpfx = ($localDBName != '') ? $localDBName.'.' : '';
 
@@ -1950,30 +1988,34 @@ class SQLDDLSerializer {
 				$kcidx = $insert->getColumnIdx($kcn);
 				if ($kcidx < 0) continue;
 				$col = $insert->columns[$kcidx];
-				if (($col->sysVarValue !== false) || ($col->value === false)) continue;
-				if ($col->value === null) {
+				if (($col->sysVarValue !== false) ||
+					(($col->filename === false) && ($col->value === false))) {
+					continue;
+				}
+				$value = $col->getValueOrFileValue($basepath);
+				if ($value === null) {
 					$whereClause .= $sep.$kcn.' is NULL';
 				} else {
 					$whereClause .= $sep.$kcn.' = ';
-					if ($col->quoted) {
-						$vlen = strlen($col->value);
+					if (($col->quoted) || ($col->filename !== false)) {
+						$vlen = strlen($value);
 						$valIsBinary = false;
 						for ($vi = 0; $vi < $vlen; $vi++) {
-							$vcc = ord($col->value[$vi]);
+							$vcc = ord($value[$vi]);
 							if (($vcc < 32) || ($vcc > 126)) {
 								$valIsBinary = true;
 								break;
 							}
 						}
 						if ($valIsBinary) {
-							$arrData = unpack("H*hex", $col->value);
+							$arrData = unpack("H*hex", $value);
 							$whereClause .= '0x'.$arrData['hex'];
 							unset($arrData);
 						} else {
-							$whereClause .= sprintf("'%s'", $this->__escape($col->value, $dialect));
+							$whereClause .= sprintf("'%s'", $this->__escape($value, $dialect));
 						}
 					} else {
-						$whereClause .= $col->value;
+						$whereClause .= $value;
 					}
 				}
 				if ($sep == '') $sep = ' and ';
@@ -2012,8 +2054,12 @@ class SQLDDLSerializer {
 					if ($insert->updateIfExists) {
 						$colNamesToUpdate = array();
 						foreach ($insert->columns as $col) {
-							if (($col->sysVarValue === false) && ($row[$col->name] != $col->value)) {
-								$colNamesToUpdate[] = $col->name;
+							if ($col->sysVarValue === false) {
+								$value = $col->getValueOrFileValue($basepath);
+								if (($row[$col->name] != $value) ||
+									(($row[$col->name] === null) != ($value === null))) {
+									$colNamesToUpdate[] = $col->name;
+								}
 							}
 						}
 						if (!empty($colNamesToUpdate)) {
@@ -2023,25 +2069,26 @@ class SQLDDLSerializer {
 							foreach ($insert->columns as $col) {
 								if (!in_array($col->name, $colNamesToUpdate)) continue;
 								$sql .= $sep.$col->name.' = ';
-								if ($col->quoted) {
-									$vlen = strlen($col->value);
+								$value = $col->getValueOrFileValue($basepath);
+								if (($col->quoted) || ($col->filename !== false)) {
+									$vlen = strlen($value);
 									$valIsBinary = false;
 									for ($vi = 0; $vi < $vlen; $vi++) {
-										$vcc = ord($col->value[$vi]);
+										$vcc = ord($value[$vi]);
 										if (($vcc < 32) || ($vcc > 126)) {
 											$valIsBinary = true;
 											break;
 										}
 									}
 									if ($valIsBinary) {
-										$arrData = unpack("H*hex", $col->value);
+										$arrData = unpack("H*hex", $value);
 										$sql .= '0x'.$arrData['hex'];
 										unset($arrData);
 									} else {
-										$sql .= sprintf("'%s'", $this->__escape($col->value, $dialect));
+										$sql .= sprintf("'%s'", $this->__escape($value, $dialect));
 									}
 								} else {
-									$sql .= $col->value;
+									$sql .= $value;
 								}
 								if ($sep == '') $sep = ', ';
 							} // foreach ($insert->columns as $col)
@@ -2065,28 +2112,31 @@ class SQLDDLSerializer {
 					$sql .= $sep;
 					if ($col->sysVarValue !== false) {
 						$sql .= $this->__convertSysVar($col->sysVarValue, $dialect);
-					} else if ($col->value === null) {
-						$sql .= 'NULL';
 					} else {
-						if ($col->quoted) {
-							$vlen = strlen($col->value);
-							$valIsBinary = false;
-							for ($vi = 0; $vi < $vlen; $vi++) {
-								$vcc = ord($col->value[$vi]);
-								if (($vcc < 32) || ($vcc > 126)) {
-									$valIsBinary = true;
-									break;
-								}
-							}
-							if ($valIsBinary) {
-								$arrData = unpack("H*hex", $col->value);
-								$sql .= '0x'.$arrData['hex'];
-								unset($arrData);
-							} else {
-								$sql .= sprintf("'%s'", $this->__escape($col->value, $dialect));
-							}
+						$value = $col->getValueOrFileValue($basepath);
+						if ($value === null) {
+							$sql .= 'NULL';
 						} else {
-							$sql .= $col->value;
+							if (($col->quoted) || ($col->filename !== false)) {
+								$vlen = strlen($value);
+								$valIsBinary = false;
+								for ($vi = 0; $vi < $vlen; $vi++) {
+									$vcc = ord($value[$vi]);
+									if (($vcc < 32) || ($vcc > 126)) {
+										$valIsBinary = true;
+										break;
+									}
+								}
+								if ($valIsBinary) {
+									$arrData = unpack("H*hex", $value);
+									$sql .= '0x'.$arrData['hex'];
+									unset($arrData);
+								} else {
+									$sql .= sprintf("'%s'", $this->__escape($value, $dialect));
+								}
+							} else {
+								$sql .= $value;
+							}
 						}
 					}
 					if ($sep == '') $sep = ', ';
@@ -2117,27 +2167,30 @@ class SQLDDLSerializer {
 				$sql .= $sep;
 				if ($col->sysVarValue !== false) {
 					$sql .= $this->__convertSysVar($col->sysVarValue, $dialect);
-				} else if ($col->value === null) {
-					$sql .= 'NULL';
 				} else {
-					if ($col->quoted) {
-						$vlen = strlen($col->value);
-						$valIsBinary = false;
-						for ($vi = 0; $vi < $vlen; $vi++) {
-							$vcc = ord($col->value[$vi]);
-							if (($vcc < 32) || ($vcc > 126)) {
-								$valIsBinary = true;
-								break;
-							}
-						}
-						if ($valIsBinary) {
-							$arrData = unpack("H*hex", $col->value);
-							$sql .= '0x'.$arrData['hex'];
-						} else {
-							$sql .= sprintf("'%s'", $this->__escape($col->value, $dialect));
-						}
+					$value = $col->getValueOrFileValue($basepath);
+					if ($value === null) {
+						$sql .= 'NULL';
 					} else {
-						$sql .= $col->value;
+						if (($col->quoted) || ($col->filename !== false)) {
+							$vlen = strlen($value);
+							$valIsBinary = false;
+							for ($vi = 0; $vi < $vlen; $vi++) {
+								$vcc = ord($value[$vi]);
+								if (($vcc < 32) || ($vcc > 126)) {
+									$valIsBinary = true;
+									break;
+								}
+							}
+							if ($valIsBinary) {
+								$arrData = unpack("H*hex", $value);
+								$sql .= '0x'.$arrData['hex'];
+							} else {
+								$sql .= sprintf("'%s'", $this->__escape($value, $dialect));
+							}
+						} else {
+							$sql .= $value;
+						}
 					}
 				}
 				if ($sep == '') $sep = ', ';
@@ -2156,30 +2209,34 @@ class SQLDDLSerializer {
 					$kcidx = $insert->getColumnIdx($kcn);
 					if ($kcidx < 0) continue;
 					$col = $insert->columns[$kcidx];
-					if (($col->sysVarValue !== false) || ($col->value === false)) continue;
-					if ($col->value === null) {
+					if (($col->sysVarValue !== false) ||
+						(($col->filename === false) && ($col->value === false))) {
+						continue;
+					}
+					$value = $col->getValueOrFileValue($basepath);
+					if ($value === null) {
 						$sql .= $sep.$kcn.' is NULL';
 					} else {
 						$sql .= $sep.$kcn.' = ';
-						if ($col->quoted) {
-							$vlen = strlen($col->value);
+						if (($col->quoted) || ($col->filename !== false)) {
+							$vlen = strlen($value);
 							$valIsBinary = false;
 							for ($vi = 0; $vi < $vlen; $vi++) {
-								$vcc = ord($col->value[$vi]);
+								$vcc = ord($value[$vi]);
 								if (($vcc < 32) || ($vcc > 126)) {
 									$valIsBinary = true;
 									break;
 								}
 							}
 							if ($valIsBinary) {
-								$arrData = unpack("H*hex", $col->value);
+								$arrData = unpack("H*hex", $value);
 								$sql .= '0x'.$arrData['hex'];
 								unset($arrData);
 							} else {
-								$sql .= sprintf("'%s'", $this->__escape($col->value, $dialect));
+								$sql .= sprintf("'%s'", $this->__escape($value, $dialect));
 							}
 						} else {
-							$sql .= $col->value;
+							$sql .= $value;
 						}
 					}
 					if ($sep == '') $sep = ' and ';
@@ -2197,28 +2254,31 @@ class SQLDDLSerializer {
 					$sql .= $sep.$col->name.' = ';
 					if ($col->sysVarValue !== false) {
 						$sql .= $this->__convertSysVar($col->sysVarValue, $dialect);
-					} else if ($col->value === null) {
-						$sql .= 'NULL';
 					} else {
-						if ($col->quoted) {
-							$vlen = strlen($col->value);
-							$valIsBinary = false;
-							for ($vi = 0; $vi < $vlen; $vi++) {
-								$vcc = ord($col->value[$vi]);
-								if (($vcc < 32) || ($vcc > 126)) {
-									$valIsBinary = true;
-									break;
-								}
-							}
-							if ($valIsBinary) {
-								$arrData = unpack("H*hex", $col->value);
-								$sql .= '0x'.$arrData['hex'];
-								unset($arrData);
-							} else {
-								$sql .= sprintf("'%s'", $this->__escape($col->value, $dialect));
-							}
+						$value = $col->getValueOrFileValue($basepath);
+						if ($value === null) {
+							$sql .= 'NULL';
 						} else {
-							$sql .= $col->value;
+							if (($col->quoted) || ($col->filename !== false)) {
+								$vlen = strlen($value);
+								$valIsBinary = false;
+								for ($vi = 0; $vi < $vlen; $vi++) {
+									$vcc = ord($value[$vi]);
+									if (($vcc < 32) || ($vcc > 126)) {
+											$valIsBinary = true;
+										break;
+									}
+								}
+								if ($valIsBinary) {
+									$arrData = unpack("H*hex", $value);
+									$sql .= '0x'.$arrData['hex'];
+									unset($arrData);
+								} else {
+									$sql .= sprintf("'%s'", $this->__escape($value, $dialect));
+								}
+							} else {
+								$sql .= $value;
+							}
 						}
 					}
 					if ($sep == '') $sep = ', ';
@@ -2229,29 +2289,33 @@ class SQLDDLSerializer {
 					$kcidx = $insert->getColumnIdx($kcn);
 					if ($kcidx < 0) continue;
 					$col = $insert->columns[$kcidx];
-					if (($col->sysVarValue !== false) || ($col->value === false)) continue;
+					if (($col->sysVarValue !== false) ||
+						(($col->filename === false) && ($col->value === false))) {
+						continue;
+					}
+					$value = $col->getValueOrFileValue($basepath);
 					$sql .= $sep.$kcn.' = ';
-					if ($col->value === null) {
+					if ($value === null) {
 						$sql .= 'NULL';
-					} else if ($col->quoted) {
-						$vlen = strlen($col->value);
+					} else if (($col->quoted) || ($col->filename !== false)) {
+						$vlen = strlen($value);
 						$valIsBinary = false;
 						for ($vi = 0; $vi < $vlen; $vi++) {
-							$vcc = ord($col->value[$vi]);
+							$vcc = ord($value[$vi]);
 							if (($vcc < 32) || ($vcc > 126)) {
 								$valIsBinary = true;
 								break;
 							}
 						}
 						if ($valIsBinary) {
-							$arrData = unpack("H*hex", $col->value);
+							$arrData = unpack("H*hex", $value);
 							$sql .= '0x'.$arrData['hex'];
 							unset($arrData);
 						} else {
-							$sql .= sprintf("'%s'", $this->__escape($col->value, $dialect));
+							$sql .= sprintf("'%s'", $this->__escape($value, $dialect));
 						}
 					} else {
-						$sql .= $col->value;
+						$sql .= $value;
 					}
 					if ($sep == '') $sep = ' and ';
 				}
@@ -2261,7 +2325,7 @@ class SQLDDLSerializer {
 		} // if ($db) ... else
 
 		return $sqlStatements;
-	}
+	} // serializeInsert()
 
 	protected function __convertSysVar($sysVar, $dialect) {
 		switch (strtolower($sysVar)) {
@@ -2503,6 +2567,8 @@ class YAMLDDLSerializer {
 					$yaml .= sprintf("        %s: {", $col->name);
 					if ($col->sysVarValue !== false) {
 						$yaml .= sprintf(" sysVarValue: %s", $col->sysVarValue);
+					} else if ($col->filename !== false) {
+						$yaml .= sprintf(" filename: %s", $col->filename);
 					} else {
 						$vlen = strlen($col->value);
 						$valIsBinary = false;
@@ -2568,6 +2634,8 @@ class SQLDDLUpdater {
 	// Returns an array of strings, where each string is a single SQL statement.
 	// Returns the SQL statements required to transform the schema from $oldDDL
 	// to match $newDDL, as an array of strings, where each string is a single SQL statement.
+	// $basepath: The base directory for insert filenames with relative paths.
+	// Returns an array of strings, where each string is a single SQL statement.
 	public function generateSQLUpdates(
 		$oldDDL,
 		$newDDL,
@@ -2576,7 +2644,8 @@ class SQLDDLUpdater {
 		$allowDropIndex = false,
 		$dialect = 'mysql',
 		$dbmap = null,
-		$localDBName = null) {
+		$localDBName = null,
+		$basepath = '') {
 
 		if (!in_array($dialect, DDL::$SUPPORTED_DIALECTS)) {
 			throw new Exception(sprintf(
@@ -2712,7 +2781,7 @@ class SQLDDLUpdater {
 					}
 				}
 				$tddl = new DDL($tles);
-				$sqlStatements = array_merge($sqlStatements, $serializer->serialize($tddl, $dialect, $dbmap, $localDBName));
+				$sqlStatements = array_merge($sqlStatements, $serializer->serialize($tddl, $dialect, $dbmap, $localDBName, $basepath));
 			}
 		}	// foreach ($newDDL->topLevelEntities as $ntle)
 
@@ -2925,7 +2994,7 @@ class SQLDDLUpdater {
 					}
 					// (Re-)create the index.
 					$tddl = new DDL(array($nidxs[$indexName]));
-					$sqlStatements = array_merge($sqlStatements, $serializer->serialize($tddl, $dialect, $dbmap, $localDBName));
+					$sqlStatements = array_merge($sqlStatements, $serializer->serialize($tddl, $dialect, $dbmap, $localDBName, $basepath));
 				}
 			}
 		}	// foreach ($commonTableNames as $tableName)
@@ -2953,7 +3022,7 @@ class SQLDDLUpdater {
 				}
 				if (!empty($tles)) {
 					$tddl = new DDL($tles);
-					$sqlStatements = array_merge($sqlStatements, $serializer->serialize($tddl, $dialect, $dbmap, $localDBName));
+					$sqlStatements = array_merge($sqlStatements, $serializer->serialize($tddl, $dialect, $dbmap, $localDBName, $basepath));
 				}
 			}
 		}
@@ -3007,7 +3076,7 @@ class SQLDDLUpdater {
 						if (($dbname === null) || ($dbname == '')) {
 							// (Re-)create the foreign key.
 							$tddl = new DDL(array($nfks[$foreignKeyName]));
-							$sqlStatements = array_merge($sqlStatements, $serializer->serialize($tddl, $dialect, null, $localDBName));
+							$sqlStatements = array_merge($sqlStatements, $serializer->serialize($tddl, $dialect, null, $localDBName, $basepath));
 						}
 					}
 				}

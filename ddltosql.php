@@ -14,7 +14,7 @@ include dirname(__FILE__).'/PostgreSQLConnection.class.php';
 // and may also be used to transform insert statements into update statements for rows which
 // exist but have non-key columns whose values don't match the original insert values (for
 // inserts with key columns and updateIfExists set to true).
-function process($ddl, $dialect, $action, $allowedTableNames, $db = null, $dbmap = null) {
+function process($ddl, $dialect, $action, $allowedTableNames, $db = null, $dbmap = null, $ddlDir = '') {
 	switch ($action) {
 	case 'outputSQL':
 		$serializer = new SQLDDLSerializer();
@@ -43,7 +43,7 @@ function process($ddl, $dialect, $action, $allowedTableNames, $db = null, $dbmap
 			switch (get_class($tle)) {
 			case 'DDLInsert':
 				if (!empty($tle->keyColumnNames)) {
-					$sqlStatements = $serializer->serializeInsert($tle, $dialect, $db);
+					$sqlStatements = $serializer->serializeInsert($tle, $dialect, $db, null, $ddlDir);
 					if (!empty($sqlStatements)) {
 						if ($dialect == 'mysql') fputs(STDOUT, "set foreign_key_checks = 0;\n");
 						foreach ($sqlStatements as $stmt) {
@@ -193,8 +193,8 @@ process(
 	$action,
 	$allowedTableNames,
 	$db,
-	$dbmap
+	$dbmap,
+	$ddlDir
 );
 if ($db) $db->close();
-
 exit(0);

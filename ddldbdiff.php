@@ -147,13 +147,15 @@ if (!empty($mapTargetTableNames)) {
 // Generate SQL to update the DDL in the database to match the current DDL from the DDL files.
 $updater = new SQLDDLUpdater();
 $sqlStatements = $updater->generateSQLUpdates(
-	$databaseDDL,
-	$currentDDL,
-	$allowDropTable,
-	$allowDropColumn,
-	$allowDropIndex,
-	$dialect,
-	$dbmap
+	$databaseDDL,		// $oldDDL
+	$currentDDL,		// $newDDL
+	$allowDropTable,	// $allowDropTable
+	$allowDropColumn,	// $allowDropColumn
+	$allowDropIndex,	// $allowDropIndex
+	$dialect,			// $dialect
+	$dbmap,				// $dbmap
+	null,				// $localDBName
+	$ddlDir				// $basepath
 );
 
 if (($dialect == 'mysql') && (!empty($sqlStatements))) fputs(STDOUT, "set foreign_key_checks = 0;\n");
