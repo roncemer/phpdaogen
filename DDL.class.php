@@ -1,6 +1,6 @@
 <?php
 // DDL.class.php
-// Copyright (c) 2011-2015 Ronald B. Cemer
+// Copyright (c) 2011-2016 Ronald B. Cemer
 // All rights reserved.
 // This software is released under the BSD license.
 // Please see the accompanying LICENSE.txt for details.
@@ -3083,7 +3083,51 @@ class SQLDDLUpdater {
 			}
 		}
 
-		return $sqlStatements;
+		// Combine consecutive "alter table" statements for the same table name into a single "alter table" statement,
+		// limiting its length to 65000 characters.
+		$new_sqlStatements = array();
+		$combinedAlterStatement = null;
+		$combinedAlterPrefix = null;
+		$alterTableRegex = '/^alter table [^\s]+ /';
+		foreach ($sqlStatements as $statement) {
+			// If the previous statement was an "alter table" statement, and the current statement is
+			// an "alter table" statement for the same table, and combining them won't exceed the maximum
+			// statement length we'd like to adhere to, append the new statement to the combined "alter table"
+			// statement.
+			// If we couldn't append (not an "alter table" statement, not the same table, or would exceed the
+			// maximum statement length), flush the existing combined "alter table" statement, and resume
+			// processing with the new statement.
+			if ($combinedAlterStatement !== null) {
+				if (preg_match($alterTableRegex, $statement, $matches) > 0) {
+					if ($matches[0] == $combinedAlterPrefix) {
+						$toAdd = ', '.substr($statement, strlen($combinedAlterPrefix));
+						if ((strlen($combinedAlterStatement)+strlen($toAdd)) <= 650000) {
+							$combinedAlterStatement .= $toAdd;
+							continue;
+						}
+					}
+				}
+				$new_sqlStatements[] = $combinedAlterStatement;
+				$combinedAlterStatement = null;
+				$combinedAlterPrefixLen = 0;
+			}
+			// If we didn't append the current statment to a combined "alter table" statement, but it is
+			// an "alter table" statement, start a new combined "alter table" statement.
+			if (preg_match($alterTableRegex, $statement, $matches) > 0) {
+				$combinedAlterStatement = $statement;
+				$combinedAlterPrefix = $matches[0];
+				continue;
+			}
+			// This is not an "alter table" statement at all.  Append it to the results.
+			$new_sqlStatements[] = $statement;
+		}
+
+		// Flush the last statment, if it was a (possibly combined) "alter table" statement.
+		if ($combinedAlterStatement !== null) {
+			$new_sqlStatements[] = $combinedAlterStatement;
+		}
+
+		return $new_sqlStatements;
 	}
 
 	private static function __indexNameSortComparator($a, $b) {
