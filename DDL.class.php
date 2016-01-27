@@ -3398,111 +3398,117 @@ class DAOClassGenerator {
 		$code .= "\t\treturn \$result;\n";
 		$code .= "\t}\n\n";
 
-		// update function
-		$code .= "\tpublic function update(\$$tableName) {\n";
+		if ($table->primaryKey !== false) {
+			// update function
+			$code .= "\tpublic function update(\$$tableName) {\n";
 
-		$anyColumnsNotInPrimaryKey = false;
-		foreach ($table->columns as $column) {
-			if (($table->primaryKey === false) ||
-				($table->primaryKey->getColumnIdx($column->name) < 0)) {
-				$anyColumnsNotInPrimaryKey = true;
-				break;
-			}
-		}
-
-		if ($anyColumnsNotInPrimaryKey) {
-			$code .= "\t\t".'$ps = new PreparedStatement("update '.$tableName.' set ';
-			$sep = '';
+			$anyColumnsNotInPrimaryKey = false;
 			foreach ($table->columns as $column) {
 				if (($table->primaryKey === false) ||
 					($table->primaryKey->getColumnIdx($column->name) < 0)) {
-					$code .= $sep.$column->name.' = ?';
+					$anyColumnsNotInPrimaryKey = true;
+					break;
+				}
+			}
+
+			if ($anyColumnsNotInPrimaryKey) {
+				$code .= "\t\t".'$ps = new PreparedStatement("update '.$tableName.' set ';
+				$sep = '';
+				foreach ($table->columns as $column) {
+					if (($table->primaryKey === false) ||
+						($table->primaryKey->getColumnIdx($column->name) < 0)) {
+						$code .= $sep.$column->name.' = ?';
+						if ($sep == '') $sep = ', ';
+					}
+				}
+				if ($table->primaryKey !== false) {
+					$whereAnd = ' where ';
+					foreach ($table->primaryKey->columns as $pkcol) {
+						$column = $table->columns[$table->getColumnIdx($pkcol->name)];
+						$code .= $whereAnd.$column->name.' = ?';
+						$whereAnd = ' and ';
+					}
+				}
+				$code .= "\");\n";
+				foreach ($table->columns as $column) {
+					if (($table->primaryKey === false) ||
+						($table->primaryKey->getColumnIdx($column->name) < 0)) {
+						$code .= "\t\t".'$ps->set'.ucwords($this->getPSDataType($column)).'($'.$tableName.'->'.$column->name.");\n";
+					}
+				}
+				if ($table->primaryKey !== false) {
+					foreach ($table->primaryKey->columns as $pkcol) {
+						$column = $table->columns[$table->getColumnIdx($pkcol->name)];
+						$code .= "\t\t".'$ps->set'.ucwords($this->getPSDataType($column)).'($'.$tableName.'->'.$column->name.");\n";
+					}
+				}
+				$code .= "\t\t".'return $this->connection->executeUpdate($ps);'."\n";
+			} else {	// if ($anyColumnsNotInPrimaryKey)
+				$code .= "\t\treturn true;\n";
+			}	// if ($anyColumnsNotInPrimaryKey) ... else
+
+			$code .= "\t}\n\n";
+		} // if ($table->primaryKey !== false)
+
+		if ($table->primaryKey !== false) {
+			// delete function
+			$code .= "\tpublic function delete(";
+			$sep = '';
+			if ($table->primaryKey !== false) {
+				foreach ($table->primaryKey->columns as $pkcol) {
+					$code .= $sep.'$'.$pkcol->name;
 					if ($sep == '') $sep = ', ';
 				}
 			}
+			$code .= ") {\n";
 			if ($table->primaryKey !== false) {
+				$code .= "\t\t".'$ps = new PreparedStatement("delete from '.$tableName;
 				$whereAnd = ' where ';
 				foreach ($table->primaryKey->columns as $pkcol) {
-					$column = $table->columns[$table->getColumnIdx($pkcol->name)];
-					$code .= $whereAnd.$column->name.' = ?';
+					$code .= $whereAnd.$pkcol->name.' = ?';
 					$whereAnd = ' and ';
 				}
-			}
-			$code .= "\");\n";
-			foreach ($table->columns as $column) {
-				if (($table->primaryKey === false) ||
-					($table->primaryKey->getColumnIdx($column->name) < 0)) {
-					$code .= "\t\t".'$ps->set'.ucwords($this->getPSDataType($column)).'($'.$tableName.'->'.$column->name.");\n";
-				}
-			}
-			if ($table->primaryKey !== false) {
+				$code .= "\");\n";
 				foreach ($table->primaryKey->columns as $pkcol) {
 					$column = $table->columns[$table->getColumnIdx($pkcol->name)];
-					$code .= "\t\t".'$ps->set'.ucwords($this->getPSDataType($column)).'($'.$tableName.'->'.$column->name.");\n";
+					$code .= "\t\t".'$ps->set'.ucwords($this->getPSDataType($column)).'($'.$column->name.");\n";
+				}
+				$code .= "\t\t".'return $this->connection->executeUpdate($ps);'."\n";
+			} else {
+				$code .= "\t\treturn true;\n";
+			}
+			$code .= "\t}\n\n";
+		} // if ($table->primaryKey !== false)
+
+		if ($table->primaryKey !== false) {
+			// load function
+			$code .= "\tpublic function load(";
+			$sep = '';
+			if ($table->primaryKey !== false) {
+				foreach ($table->primaryKey->columns as $pkcol) {
+					$code .= $sep.'$'.$pkcol->name;
+					if ($sep == '') $sep = ', ';
 				}
 			}
-			$code .= "\t\t".'return $this->connection->executeUpdate($ps);'."\n";
-		} else {	// if ($anyColumnsNotInPrimaryKey)
-			$code .= "\t\treturn true;\n";
-		}	// if ($anyColumnsNotInPrimaryKey) ... else
-
-		$code .= "\t}\n\n";
-
-		// delete function
-		$code .= "\tpublic function delete(";
-		$sep = '';
-		if ($table->primaryKey !== false) {
-			foreach ($table->primaryKey->columns as $pkcol) {
-				$code .= $sep.'$'.$pkcol->name;
-				if ($sep == '') $sep = ', ';
+			$code .= ") {\n";
+			if ($table->primaryKey !== false) {
+				$code .= "\t\t".'$ps = new PreparedStatement("select * from '.$tableName;
+				$whereAnd = ' where ';
+				foreach ($table->primaryKey->columns as $pkcol) {
+					$code .= $whereAnd.$pkcol->name.' = ?';
+					$whereAnd = ' and ';
+				}
+				$code .= "\", 0, 1);\n";
+				foreach ($table->primaryKey->columns as $pkcol) {
+					$column = $table->columns[$table->getColumnIdx($pkcol->name)];
+					$code .= "\t\t".'$ps->set'.ucwords($this->getPSDataType($column)).'($'.$pkcol->name.");\n";
+				}
 			}
-		}
-		$code .= ") {\n";
-		if ($table->primaryKey !== false) {
-			$code .= "\t\t".'$ps = new PreparedStatement("delete from '.$tableName;
-			$whereAnd = ' where ';
-			foreach ($table->primaryKey->columns as $pkcol) {
-				$code .= $whereAnd.$pkcol->name.' = ?';
-				$whereAnd = ' and ';
-			}
-			$code .= "\");\n";
-			foreach ($table->primaryKey->columns as $pkcol) {
-				$column = $table->columns[$table->getColumnIdx($pkcol->name)];
-				$code .= "\t\t".'$ps->set'.ucwords($this->getPSDataType($column)).'($'.$column->name.");\n";
-			}
-			$code .= "\t\t".'return $this->connection->executeUpdate($ps);'."\n";
-		} else {
-			$code .= "\t\treturn true;\n";
-		}
-		$code .= "\t}\n\n";
-
-		// load function
-		$code .= "\tpublic function load(";
-		$sep = '';
-		if ($table->primaryKey !== false) {
-			foreach ($table->primaryKey->columns as $pkcol) {
-				$code .= $sep.'$'.$pkcol->name;
-				if ($sep == '') $sep = ', ';
-			}
-		}
-		$code .= ") {\n";
-		if ($table->primaryKey !== false) {
-			$code .= "\t\t".'$ps = new PreparedStatement("select * from '.$tableName;
-			$whereAnd = ' where ';
-			foreach ($table->primaryKey->columns as $pkcol) {
-				$code .= $whereAnd.$pkcol->name.' = ?';
-				$whereAnd = ' and ';
-			}
-			$code .= "\", 0, 1);\n";
-			foreach ($table->primaryKey->columns as $pkcol) {
-				$column = $table->columns[$table->getColumnIdx($pkcol->name)];
-				$code .= "\t\t".'$ps->set'.ucwords($this->getPSDataType($column)).'($'.$pkcol->name.");\n";
-			}
-		}
-		$code .= "\t\t".'$rows = $this->findWithPreparedStatement($ps);'."\n";
-		$code .= "\t\t".'if (count($rows) > 0) return $rows[0];'."\n";
-		$code .= "\t\treturn false;\n";
-		$code .= "\t}\n\n";
+			$code .= "\t\t".'$rows = $this->findWithPreparedStatement($ps);'."\n";
+			$code .= "\t\t".'if (count($rows) > 0) return $rows[0];'."\n";
+			$code .= "\t\treturn false;\n";
+			$code .= "\t}\n\n";
+		} // if ($table->primaryKey !== false)
 
 
 		// finder functions for each column
