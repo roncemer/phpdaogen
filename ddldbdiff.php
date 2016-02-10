@@ -1,6 +1,6 @@
 <?php
 // ddldbdiff.php
-// Copyright (c) 2011-2014 Ronald B. Cemer
+// Copyright (c) 2011-2016 Ronald B. Cemer
 // All rights reserved.
 // This software is released under the BSD license.
 // Please see the accompanying LICENSE.txt for details.
@@ -91,7 +91,8 @@ class MyConnectionFactory extends AbstractINIMultiDatabaseConnectionFactory {
 MyConnectionFactory::$INI_FILE = $databaseIniFile;
 
 $connectionParamsByName = MyConnectionFactory::getConnectionParamsByName();
-if (!isset($connectionParamsByName[$connectionName])) {
+$cp = MyConnectionFactory::getConnectionParams($connectionName, null, null, $connectionParamsByName);
+if (empty($cp)) {
 	fprintf(STDERR, "Invalid connection name: %s\n", $connectionName);
 	exit(30);
 }

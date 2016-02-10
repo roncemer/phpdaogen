@@ -1,4 +1,10 @@
 <?php
+// parseini_multi.php
+// Copyright (c) 2011-2016 Ronald B. Cemer
+// All rights reserved.
+// This software is released under the BSD license.
+// Please see the accompanying LICENSE.txt for details.
+
 include dirname(dirname(__FILE__)).'/phpdaogen/AbstractINIMultiDatabaseConnectionFactory.class.php';
 include dirname(dirname(__FILE__)).'/phpdaogen/DDL.class.php';
 
@@ -29,5 +35,6 @@ $params = AbstractINIMultiDatabaseConnectionFactory::getConnectionParams($connec
 foreach ($params as $key=>$val) {
 	echo "ini_${key}=".escapeshellarg($val)."\n";
 }
+echo 'ini_allConnectionNames='.implode(',', array_keys($connectionParamsByName))."\n";
 
 exit(0);

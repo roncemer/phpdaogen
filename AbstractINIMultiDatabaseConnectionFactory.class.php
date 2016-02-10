@@ -1,6 +1,6 @@
 <?php
 // AbstractINIMultiDatabaseConnectionFactory.class.php
-// Copyright (c) 2010-2015 Ronald B. Cemer
+// Copyright (c) 2010-2016 Ronald B. Cemer
 // All rights reserved.
 // This software is released under the BSD license.
 // Please see the accompanying LICENSE.txt for details.
@@ -107,8 +107,20 @@ abstract class AbstractINIMultiDatabaseConnectionFactory {
 			} // if (($vhost != '') || ($uri != ''))
 		}
 
-		return isset($connectionParamsByName[$connectionName]) ?
-			$connectionParamsByName[$connectionName] : $connectionParamsByName[''];
+		// If we have a connection name, and it reference a valid section in the database.ini file, return that section.
+		if (($connectionName != '') &&
+			array_key_exists($connectionName, $connectionParamsByName) &&
+			is_array($connectionParamsByName[$connectionName])) {
+			return $connectionParamsByName[$connectionName];
+		}
+
+		// Return the first named section in the database.ini file, if there is one.
+		foreach ($connectionParamsByName as $k=>$v) {
+			if (is_array($v)) return $v;
+		}
+
+		// No named sections in the database.ini file.  Return an empty array.
+		return array();
 	} // getConnectionParams()
 
 	// Return an array, indexed by connection name ('' for default connection),
@@ -131,46 +143,42 @@ abstract class AbstractINIMultiDatabaseConnectionFactory {
 			$cfg = array();
 		}
 
-		$connectionParamsByName = array(
-			''=>array(
-				'connectionClass'=>'MySQLiConnection',
-				'server'=>'localhost',
-				'username'=>'root',
-				'password'=>'',
-				'database'=>'',
-				'description'=>'(unknown)',
-				'vhost'=>'*',
-				'uriPrefix'=>'*',
-				'tableToDatabaseMap'=>'',
-			)
+		$defaults = array(
+			'connectionClass'=>'MySQLiConnection',
+			'server'=>'localhost',
+			'username'=>'root',
+			'password'=>'',
+			'database'=>'',
+			'description'=>'(unknown)',
+			'showInList'=>true,
+			'vhost'=>'*',
+			'uriPrefix'=>'*',
+			'tableToDatabaseMap'=>'',
 		);
 
-		$secondaryConnectionNames = array();
-		foreach ($cfg as $key=>$val) {
-			if ($key == '') continue;
-			if (is_array($val)) {
-				$secondaryConnectionNames[] = $key;
-			} else {
-				$connectionParamsByName[''][$key] = (string)$val;
-			}
-		}
-		$connectionParamsByName['']['secondaryConnectionNames'] = implode(',', $secondaryConnectionNames);
-
-		foreach ($cfg as $key=>$val) {
-			if ($key == '') continue;
-			if (is_array($val)) {
-				if (!isset($connectionParamsByName[$key])) {
-					$connectionParamsByName[$key] = $connectionParamsByName[''];
-					foreach ($val as $key2=>$val2) {
-						$connectionParamsByName[$key][$key2] = (string)$val2;
+		$connectionParamsByName = array();
+		foreach ($cfg as $connectionName=>$connectionParams) {
+			$connectionName = trim($connectionName);
+			if (($connectionName == '') || (!is_array($connectionParams))) continue;
+			if (array_key_exists('template', $connectionParams)) {
+				$template = trim($connectionParams['template']);
+				unset($connectionParams['template']);
+				if ($template != '') {
+					if ($template == $connectionName) {
+						throw new Exception(sprintf('Connection "%s" cannot reference itself as its own template.', $connectionName));
 					}
+					if (!array_key_exists($template, $connectionParamsByName)) {
+						throw new Exception(sprintf('Template connection "%s" for connection "%s" must be defined above connection "%s".', $template, $connectionName, $connectionName));
+					}
+					$connectionParamsByName[$connectionName] = array_merge($defaults, $connectionParamsByName[$template], $connectionParams);
+				} else {
+					$connectionParamsByName[$connectionName] = array_merge($defaults, $connectionParams);
 				}
+			} else {
+				$connectionParamsByName[$connectionName] = array_merge($defaults, $connectionParams);
 			}
-		}
-
-		// Be sure each connection has its own connection name as the connectionName property.
-		foreach (array_keys($connectionParamsByName) as $name) {
-			$connectionParamsByName[$name]['connectionName'] = $name;
+			// Be sure each connection has its own connection name as the connectionName property.
+			$connectionParamsByName[$connectionName]['connectionName'] = $connectionName;
 		}
 
 		return $connectionParamsByName;
