@@ -3599,7 +3599,7 @@ class DAOClassGenerator {
 		$code .= "\tpublic function findWithPreparedStatement(\$ps) {\n";
 		$code .= "\t\t\$cacheKey = null;\n";
 		$code .= "\t\tif (\$this->cache !== null) {\n";
-		$code .= "\t\t\t\$cacheKey = \$ps->toSQL(\$this->connection);\n";
+		$code .= "\t\t\t\$cacheKey = serialize(\$ps);\n";
 		$code .= "\t\t\tif ((\$rows = \$this->cache->get(\$cacheKey)) !== false) {\n";
 		$code .= "\t\t\t\treturn \$rows;\n";
 		$code .= "\t\t\t}\n";

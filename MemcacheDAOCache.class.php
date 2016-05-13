@@ -4,12 +4,12 @@
 // ANY MANUAL EDITS WILL BE LOST.
 
 // MemcacheDAOCache.class.php
-// Copyright (c) 2010 Ronald B. Cemer
+// Copyright (c) 2010-2016 Ronald B. Cemer
 // All rights reserved.
 // This software is released under the BSD license.
 // Please see the accompanying LICENSE.txt for details.
 
-if (!class_exists('DAOCache', false)) include(dirname(__FILE__).'/DAOCache.interface.php');
+if (!interface_exists('DAOCache', false)) include(dirname(__FILE__).'/DAOCache.interface.php');
 
 class MemcacheDAOCache implements DAOCache {
 	protected $memcache;
@@ -37,15 +37,15 @@ class MemcacheDAOCache implements DAOCache {
 
 	// Get a group of rows from the cache.
 	// Parameters:
-	// $query: The SQL query which will be used to retrieve the rows from the database in the
-	//     event of a cache miss.
+	// $cacheKey: A unique cache key derived from the PreparedStatement which will be used to retrieve
+	//     the rows from the database in the event of a cache miss.
 	// Returns:
 	// A linear array of the matching rows, or false if a cache miss occurred.
-	public function get($query) {
-		$key = sprintf('DAOCache:%s:%s', $this->keyPrefix, sha1($query));
+	public function get($cacheKey) {
+		$key = sprintf('DAOCache:%s:%s', $this->keyPrefix, sha1($cacheKey));
 		$hits = $this->memcache->get($key);
 		if (($hits !== false) && (isset($hits['q'])) && (isset($hits['r'])) &&
-			($hits['q'] == $query)) {
+			($hits['q'] == $cacheKey)) {
 			return $hits['r'];
 		}
 		return false;
@@ -53,12 +53,14 @@ class MemcacheDAOCache implements DAOCache {
 
 	// Store a group of rows into the cache.
 	// Parameters:
-	// $query: The SQL query which was used to retrieve the rows from the database.
-	// $rows: A linear array of the rows resulting from the SQL query.  These will be stored in
-	//     the cache using the database name and SQL query as a key.
-	public function set($query, $rows) {
-		$key = sprintf('DAOCache:%s:%s', $this->keyPrefix, sha1($query));
-		$val = array('q'=>$query, 'r'=>$rows);
+	// $cacheKey: A unique cache key derived from the PreparedStatement which was used to retrieve
+	//     the rows from the database.
+	// $rows: A linear array of the rows resulting from the SQL query contained in the PreparedStatement
+	//     which was used to fetch the rows.  These will be stored in the cache using the database name
+	//     and cache key as a key.
+	public function set($cacheKey, $rows) {
+		$key = sprintf('DAOCache:%s:%s', $this->keyPrefix, sha1($cacheKey));
+		$val = array('q'=>$cacheKey, 'r'=>$rows);
 		switch (get_class($this->memcache)) {
 		case 'Memcache':
 			$this->memcache->set($key, $val, MEMCACHE_COMPRESSED, $this->expirationTimeInSeconds);
