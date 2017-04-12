@@ -39,7 +39,7 @@ class MySQLConnection extends Connection {
 		if (($this->conn = mysql_connect($this->server, $this->username, $this->password, true, 128)) === false) {
 			throw new Exception('Database connection failed');
 		}
-		mysql_set_charset('utf8', $this->conn);
+		mysql_set_charset('utf8mb4', $this->conn);
 		mysql_select_db($this->database, $this->conn);
 	} // open()
 

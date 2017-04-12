@@ -51,7 +51,7 @@ class MySQLiConnection extends Connection {
 			$this->conn = false;
 			throw new Exception(sprintf('Database connection failed; errno %d - %s', $cn->connect_errno, $cn->connect_error));
 		}
-		$this->conn->set_charset("utf8");
+		$this->conn->set_charset('utf8mb4');
 	} // open()
 
 	public function close() {
