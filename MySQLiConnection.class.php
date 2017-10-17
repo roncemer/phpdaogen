@@ -22,7 +22,7 @@ class MySQLiConnection extends Connection {
 	private $transactionRolledBack = false;
 	private $updatedRowCount = 0;
 
-	public function MySQLiConnection($server, $username, $password, $database) {
+	public function __construct($server, $username, $password, $database) {
 		$this->server = $server;
 		$this->username = $username;
 		$this->password = $password;
