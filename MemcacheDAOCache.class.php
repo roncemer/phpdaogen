@@ -28,7 +28,7 @@ class MemcacheDAOCache implements DAOCache {
 	//     web server clusters from accidentally sharing unrelated data through the cache
 	//     (by overwriting each other's cache entries or other accidental cache key clashes).
 	//     Optional.  Defaults to empty.
-	public function MemcacheDAOCache($memcache, $expirationTimeInSeconds = 30, $keyPrefix = '') {
+	public function __construct($memcache, $expirationTimeInSeconds = 30, $keyPrefix = '') {
 		if ($expirationTimeInSeconds < 1) $expirationTimeInSeconds = 1;
 		$this->memcache = $memcache;
 		$this->expirationTimeInSeconds = $expirationTimeInSeconds;

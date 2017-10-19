@@ -23,7 +23,7 @@ class FileCacheDAOCache implements DAOCache {
 	//     web server clusters from accidentally sharing unrelated data through the cache
 	//     (by overwriting each other's cache entries or other accidental cache key clashes).
 	//     Optional.  Defaults to empty.
-	public function FileCacheDAOCache($fileCache, $keyPrefix = '') {
+	public function __construct($fileCache, $keyPrefix = '') {
 		$this->fileCache = $fileCache;
 		$this->keyPrefix = $keyPrefix;
 	}

@@ -50,7 +50,7 @@ class FileCache {
 	//     Each segment consists of the next two hexadecimal characters of the sha1 hash of the
 	//     cache key.  This must be between 1 and 10, inclusive.
 	//     Optional.  Defaults to 2.
-	public function FileCache(
+	public function __construct(
 		$path,
 		$expirationTimeInSeconds = 30,
 		$cleanInterval = 1000,

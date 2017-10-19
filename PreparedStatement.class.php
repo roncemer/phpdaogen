@@ -16,7 +16,7 @@ class PreparedStatement {
 	private $paramIdx = 0;
 	public $selectOffset = 0, $selectLimit = 0;
 
-	public function PreparedStatement($sql, $selectOffset = 0, $selectLimit = 0, $isRawSQL = false) {
+	public function __construct($sql, $selectOffset = 0, $selectLimit = 0, $isRawSQL = false) {
 		$sql = trim($sql, " \t\n\r\x00\x0b;");
 		if ($isRawSQL) {
 			$this->sqlPieces = array($sql);

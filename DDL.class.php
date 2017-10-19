@@ -17,7 +17,7 @@ class DDL {
 	// Array of DDLTable, DDLIndex, DDLInsert instances.
 	public $topLevelEntities;
 
-	public function DDL($topLevelEntities = array()) {
+	public function __construct($topLevelEntities = array()) {
 		$this->topLevelEntities = $topLevelEntities;
 	}
 
