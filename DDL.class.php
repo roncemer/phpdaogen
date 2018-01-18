@@ -99,6 +99,70 @@ class DDL {
 		$result->fks = $fks;
 		return $result;
 	}
+
+	public static function __escape($s, $dialect) {
+		switch ($dialect) {
+		case 'mysql':
+			return str_replace(
+				array(
+					"\x00",
+					"\n",
+					"\r",
+					"\\",
+					"'",
+					"\"",
+					"\x1a",
+				),
+				array(
+					"\\\x00",
+					"\\\n",
+					"\\\r",
+					"\\\\",
+					"\\'",
+					"\\\"",
+					"\\\x1a",
+				),
+				$s
+			);
+			break;
+		case 'pgsql':
+			$s = str_replace("'", "''", $s);
+			break;
+		}
+		return $s;
+	}
+
+	public static function __unescape($s, $dialect) {
+		switch ($dialect) {
+		case 'mysql':
+			return str_replace(
+				array(
+					"\\\x00",
+					"\\\n",
+					"\\\r",
+					"\\\\",
+					"\\'",
+					"\\\"",
+					"\\\x1a",
+				),
+				array(
+					"\x00",
+					"\n",
+					"\r",
+					"\\",
+					"'",
+					"\"",
+					"\x1a",
+				),
+				$s
+			);
+			break;
+		case 'pgsql':
+			$s = str_replace("''", "'", $s);
+			break;
+		}
+		return $s;
+	}
 } // DDL
 
 // The DDLTable class represents a complete table definition including columns and optional primary
@@ -635,7 +699,16 @@ EOF
 					} else if ($tc->Default == 'CURRENT_TIMESTAMP') {
 						$sysVarDefault = 'CURRENT_TIMESTAMP';
 					} else {
-						$defaultValue = $tc->Default;
+						// For text, tinytext, mediumtext and longtext types in MySQL, "desc <tablename>" has the default
+						// value quoted, while it is NOT quoted for other character types.
+						if (($type == 'text') &&
+							(($tcdlen = strlen($tc->Default)) >= 2) &&
+							($tc->Default[0] == '\'') &&
+							($tc->Default[$tcdlen-1] == '\'')) {
+							$defaultValue = DDL::__unescape(substr($tc->Default, 1, $tcdlen-2), 'mysql');
+						} else {
+							$defaultValue = $tc->Default;
+						}
 						// For date, datetime and time defaults which are all zeros,
 						// take the default down to an empty string.
 						if ((($type == 'date') && ($defaultValue == '0000-00-00')) ||
@@ -1899,7 +1972,7 @@ class SQLDDLSerializer {
 					} else {
 						$sql .= sprintf(
 							" default '%s'",
-							$this->__escape($col->defaultValue, $dialect)
+							DDL::__escape($col->defaultValue, $dialect)
 						);
 					}
 					break;
@@ -1915,7 +1988,7 @@ class SQLDDLSerializer {
 					} else {
 						$sql .= sprintf(
 							" default '%s'",
-							$this->__escape($col->defaultValue, $dialect)
+							DDL::__escape($col->defaultValue, $dialect)
 						);
 					}
 					break;
@@ -1933,7 +2006,7 @@ class SQLDDLSerializer {
 					} else {
 						$sql .= sprintf(
 							" default '%s'",
-							$this->__escape($col->defaultValue, $dialect)
+							DDL::__escape($col->defaultValue, $dialect)
 						);
 					}
 					break;
@@ -1954,7 +2027,7 @@ class SQLDDLSerializer {
 					} else {
 						$sql .= sprintf(
 							" default '%s'",
-							$this->__escape($col->defaultValue, $dialect)
+							DDL::__escape($col->defaultValue, $dialect)
 						);
 					}
 					break;
@@ -2012,7 +2085,7 @@ class SQLDDLSerializer {
 							$whereClause .= '0x'.$arrData['hex'];
 							unset($arrData);
 						} else {
-							$whereClause .= sprintf("'%s'", $this->__escape($value, $dialect));
+							$whereClause .= sprintf("'%s'", DDL::__escape($value, $dialect));
 						}
 					} else {
 						$whereClause .= $value;
@@ -2085,7 +2158,7 @@ class SQLDDLSerializer {
 										$sql .= '0x'.$arrData['hex'];
 										unset($arrData);
 									} else {
-										$sql .= sprintf("'%s'", $this->__escape($value, $dialect));
+										$sql .= sprintf("'%s'", DDL::__escape($value, $dialect));
 									}
 								} else {
 									$sql .= $value;
@@ -2132,7 +2205,7 @@ class SQLDDLSerializer {
 									$sql .= '0x'.$arrData['hex'];
 									unset($arrData);
 								} else {
-									$sql .= sprintf("'%s'", $this->__escape($value, $dialect));
+									$sql .= sprintf("'%s'", DDL::__escape($value, $dialect));
 								}
 							} else {
 								$sql .= $value;
@@ -2186,7 +2259,7 @@ class SQLDDLSerializer {
 								$arrData = unpack("H*hex", $value);
 								$sql .= '0x'.$arrData['hex'];
 							} else {
-								$sql .= sprintf("'%s'", $this->__escape($value, $dialect));
+								$sql .= sprintf("'%s'", DDL::__escape($value, $dialect));
 							}
 						} else {
 							$sql .= $value;
@@ -2233,7 +2306,7 @@ class SQLDDLSerializer {
 								$sql .= '0x'.$arrData['hex'];
 								unset($arrData);
 							} else {
-								$sql .= sprintf("'%s'", $this->__escape($value, $dialect));
+								$sql .= sprintf("'%s'", DDL::__escape($value, $dialect));
 							}
 						} else {
 							$sql .= $value;
@@ -2274,7 +2347,7 @@ class SQLDDLSerializer {
 									$sql .= '0x'.$arrData['hex'];
 									unset($arrData);
 								} else {
-									$sql .= sprintf("'%s'", $this->__escape($value, $dialect));
+									$sql .= sprintf("'%s'", DDL::__escape($value, $dialect));
 								}
 							} else {
 								$sql .= $value;
@@ -2312,7 +2385,7 @@ class SQLDDLSerializer {
 							$sql .= '0x'.$arrData['hex'];
 							unset($arrData);
 						} else {
-							$sql .= sprintf("'%s'", $this->__escape($value, $dialect));
+							$sql .= sprintf("'%s'", DDL::__escape($value, $dialect));
 						}
 					} else {
 						$sql .= $value;
@@ -2360,36 +2433,6 @@ class SQLDDLSerializer {
 			throw new Exception(sprintf("Invalid system variable reference \"%s\".", $sysVar));
 			break;
 		}
-	}
-
-	protected function __escape($s, $dialect) {
-		switch ($dialect) {
-		case 'mysql':
-			$s2 = '';
-			$len = strlen($s);
-			for ($i = 0; $i < $len; $i++) {
-				switch ($s[$i]) {
-				case "\x00":
-				case "\n":
-				case "\r":
-				case "\\":
-				case "'":
-				case "\"":
-				case "\x1a":
-					$s2 .= "\\";
-					// no break here.
-				default:
-					$s2 .= $s[$i];
-				}
-			}
-			$s = $s2;
-			unset($s2);
-			break;
-		case 'pgsql':
-			$s = str_replace("'", "''", $s);
-			break;
-		}
-		return $s;
 	}
 } // SQLDDLSerializer
 
