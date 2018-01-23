@@ -696,7 +696,7 @@ EOF
 								break;
 							}
 						}
-					} else if ($tc->Default == 'CURRENT_TIMESTAMP') {
+					} else if (($tc->Default == 'CURRENT_TIMESTAMP') || (strcasecmp($tc->Default, 'current_timestamp()') == 0)) {
 						$sysVarDefault = 'CURRENT_TIMESTAMP';
 					} else {
 						// For text, tinytext, mediumtext and longtext types in MySQL, "desc <tablename>" has the default
