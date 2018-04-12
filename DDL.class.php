@@ -178,7 +178,7 @@ class DDLTable {
 	// A single DDLPrimaryKey instance, or false if none.
 	public $primaryKey;
 
-	public function DDLTable($tableName, $columns = array(), $primaryKey = false) {
+	public function __construct($tableName, $columns = array(), $primaryKey = false) {
 		$this->tableName = $tableName;
 		$this->columns = $columns;
 		$this->primaryKey = $primaryKey;
@@ -204,7 +204,7 @@ class DDLForeignKey {
 	// Array of DDLForeignKeyColumn instances.
 	public $columns;
 
-	public function DDLForeignKey($foreignKeyName, $localTableName, $foreignTableName, $columns = array()) {
+	public function __construct($foreignKeyName, $localTableName, $foreignTableName, $columns = array()) {
 		$this->foreignKeyName= $foreignKeyName;
 		$this->localTableName = $localTableName;
 		$this->foreignTableName = $foreignTableName;
@@ -247,7 +247,7 @@ class DDLIndex {
 	// Whether this is a fulltext index (boolean).
 	public $fulltext;
 
-	public function DDLIndex($indexName, $tableName, $unique, $columns = array(), $fulltext = false) {
+	public function __construct($indexName, $tableName, $unique, $columns = array(), $fulltext = false) {
 		$this->indexName = $indexName;
 		$this->tableName = $tableName;
 		$this->unique = $unique;
@@ -281,7 +281,7 @@ class DDLInsert {
 	// Requires that keyColumnNames be specified.
 	public $updateIfExists;
 
-	public function DDLInsert($tableName, $columns = array(), $keyColumnNames = array(), $updateIfExists = false) {
+	public function __construct($tableName, $columns = array(), $keyColumnNames = array(), $updateIfExists = false) {
 		$this->tableName = $tableName;
 		$this->columns = $columns;
 		$this->keyColumnNames = $keyColumnNames;
@@ -323,7 +323,7 @@ class DDLTableColumn {
 	// Whether to use current connection's time zone; only applies to datetime type (boolean).
 	public $useTimeZone;
 
-	public function DDLTableColumn(
+	public function __construct(
 		$name,
 		$type,
 		$size,
@@ -374,7 +374,7 @@ class DDLPrimaryKey {
 	// Array of DDLKeyColumn instances.
 	public $columns;
 
-	public function DDLPrimaryKey($columns = array()) {
+	public function __construct($columns = array()) {
 		$this->columns = $columns;
 	}
 
@@ -399,7 +399,7 @@ class DDLForeignKeyColumn {
 	// The name of the referenced column in the foreign table.
 	public $foreignName;
 
-	public function DDLForeignKeyColumn($localName, $foreignName) {
+	public function __construct($localName, $foreignName) {
 		$this->localName = $localName;
 		$this->foreignName = $foreignName;
 	}
@@ -412,7 +412,7 @@ class DDLKeyColumn {
 	// The name of the column.
 	public $name;
 
-	public function DDLKeyColumn($name) {
+	public function __construct($name) {
 		$this->name = $name;
 	}
 } // DDLKeyColumn
@@ -432,7 +432,7 @@ class DDLInsertColumn {
 	// Whether to quote value; only applies when value is set and sysVarValue is false (boolean).
 	public $quoted;
 
-	public function DDLInsertColumn($name, $value, $filename = false, $sysVarValue = false, $quoted = false) {
+	public function __construct($name, $value, $filename = false, $sysVarValue = false, $quoted = false) {
 		$this->name = $name;
 		$this->value = $value;
 		$this->filename = $filename;
@@ -3191,7 +3191,7 @@ class DDLTableToDatabaseMap {
 	// Array of all target database names.
 	public $allTargetDatabases;
 
-	public function DDLTableToDatabaseMap($configString = null) {
+	public function __construct($configString = null) {
 		$this->clear();
 		if (($configString !== null) && ($configString != '')) {
 			$this->parseFromConfigString($configString);
