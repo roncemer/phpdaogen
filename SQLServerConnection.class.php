@@ -12,12 +12,12 @@
 if (!class_exists('Connection', false)) include(dirname(__FILE__).'/Connection.class.php');
 
 class SQLServerConnection extends Connection {
-	private $server, $username, $password, $database;
+	protected $server, $username, $password, $database;
 
-	private $conn = false;
-	private $transactionDepth = 0;
-	private $transactionRolledBack = false;
-	private $updatedRowCount = 0;
+	protected $conn = false;
+	protected $transactionDepth = 0;
+	protected $transactionRolledBack = false;
+	protected $updatedRowCount = 0;
 
 	public function __construct($server, $username, $password, $database) {
 		$this->server = $server;
