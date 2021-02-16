@@ -88,4 +88,15 @@ class PreparedStatement {
 		}
 		return $sql;
 	}
+
+    // Get an array of the SQL pieces.  Each of the pieces is separated by a ? placeholder in the original SQL query template.
+    public function getSQLPieces() { return $this->sqlPieces; }
+    // Get an array of the parameters to be inserted into the query.
+    public function getParams() { return $this->params; }
+    // Get an array of booleans which indicate whether each string parameter is a binary string.
+    public function getParamsAreBinary() { return $this->paramsAreBinary; }
+    // Get the select offset (number of initial rows to skip in the query).
+    public function getSelectOffset() { return $this->selectOffset; }
+    // Get the select limit (maximum number of rows to return from the query).
+    public function getSelectLimit() { return $this->selectLimit; }
 }
